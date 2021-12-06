@@ -35,42 +35,6 @@ def vectrize(x_test):
     x = sc.fit_transform(x)
     return x
 
-
-# def Train(X,Y):
-#     cv = CountVectorizer(max_features = 2500)
-#     x = cv.fit_transform(X).toarray()
-#     y=Y
-#     sc = StandardScaler()
-#     x = sc.fit_transform(x)
-#     print(x.shape)
-#     print(len(y))
-#     # print("traning:",x,y)
-	
-
-#     try:
-#         # classifier.partial_fit(X, Y , classes=list(range(2)))
-#         classifier.partial_fit(x, y)
-
-#     except Exception as e: 
-#         print("error in traning:",e)
-
-#     try:
-
-        
-#         y_pred = classifier.predict(test_x)
-#         y_pred=list(map(lambda x:0 if x<0 else 1,y_pred))
-#         #print(test_y,y_pred)
-#         print("Training Accuracy :", classifier.score(x, y))
-#         print("Test Accuracy :", classifier.score(test_x, test_y))
-#         print("F1 score :", f1_score(test_y, y_pred))
-#         cm = confusion_matrix(test_y, y_pred)
-#         print(cm)
-#         print("RMSE:",mean_squared_error(test_y, y_pred))
-
-#     except Exception as e: 
-#         print("error in accuracy:",e)
-    
-
 def createDataFrame(rdd):
     try:
         # creating the partial dataframe
@@ -93,35 +57,37 @@ def createDataFrame(rdd):
         # printing the final DataFrame
         tokenizer = Tokenizer(inputCol='Tweet', outputCol='words_token')
         df_words_token = tokenizer.transform(df_select_clean)
-        # t1 = tokenizer.transform(test_df)
+
         # Remove stop words
         remover = StopWordsRemover(inputCol='words_token', outputCol='filtered')
         df_words_no_stopw = remover.transform(df_words_token)
-        # t2 = remover.transform(t1)
 
+        #Hashing using HashingTF
         hashtf = HashingTF(numFeatures=2500, inputCol="filtered", outputCol='tf')
         label_stringIdx = StringIndexer(inputCol = "Label", outputCol = "target")
         
+        #Pipelining and transforming using the dtages of hashingTF
         pipeline = Pipeline(stages=[hashtf,label_stringIdx])
+        
+        #Pipeline fitting using the clean data
         pipelineFit = pipeline.fit(df_words_no_stopw)
         train_df = pipelineFit.transform(df_words_no_stopw)
-        # testd=pipelineFit.transform(t2)
-        train_df.show(5)
-        # train_df,testd=train_test_split(train_df,test_size=0.2)
+
+        #converting to numpy array and reshaping it according to the dimensions
         trainx=np.array(train_df.select("tf").collect())
         trainy=np.array(train_df.select("target").collect())
         d, x, y = trainx.shape
         trainx=trainx.reshape((d,x*y))
-        # print(trainx.shape)
-        # print("y",trainy.shape)
+
+        #splitting train pre-processed data into train and test
         trainx,test_x,trainy,test_y=train_test_split(trainx, trainy, test_size=0.2, random_state=42)
-        # test_x=np.array(testd.select("tf").collect())
-        # test_y=np.array(testd.select("target").collect())
-        # d, x, y = test_x.shape
-        # test_x=test_x.reshape((d,x*y))
+
         global maxfsc,batchsize,inc
         try:
+            #creating pkl files to use the best fit trained model
             model=joblib.load("SGDC_"+str(batchsize)+'.pkl')
+
+            #partial fitting the model
             model.partial_fit(trainx, trainy,classes=np.unique(trainy))
             joblib.dump(model,"SGDC_"+str(batchsize)+'.pkl')
 
@@ -129,11 +95,12 @@ def createDataFrame(rdd):
             print("error in traning:",e)
 
         try:
-
-        
+            #predicting the sentiment
             y_pred = model.predict(test_x)
-            # print(y_pred)
+
             inc+=1
+
+            #finding the performance metrics
             fsc=f1_score(test_y,y_pred)
             cm = confusion_matrix(test_y, y_pred)
             print(cm)
@@ -141,6 +108,7 @@ def createDataFrame(rdd):
             print('--------------------------',inc,'------------------------')    
             print("f1 score",fsc)
             
+            #finding rmse,accuracy,recall and precision
             rmse=mean_squared_error(test_y, y_pred)
             acc=accuracy_score(test_y, y_pred)
             rsc=recall_score(test_y, y_pred, average=None)[0]
@@ -186,9 +154,8 @@ spark.sparkContext.setLogLevel("ERROR")
 
 # creating a classifier
 classifier = SGDClassifier()
-#classifier = PassiveAggressiveClassifier()
-# classifier = SGDRegressor()
-batchsize=3000
+
+batchsize=sys.argv[1]
 joblib.dump(classifier,"SGDC_"+str(batchsize)+".pkl")
 maxfsc=0
 inc=0
@@ -196,20 +163,6 @@ header=['iter','f1','maxfc','acc','precision','recall','batchsize','rmse']
 with open('./SGDC_stats_'+str(batchsize)+'.csv','a+') as fp:
     writer=csv.writer(fp)
     writer.writerow(header)
-# gettin
-# g the test dataset
-# test_df = spark.read.csv("my_test.csv")
-# oldColumns = test_df.schema.names
-# newColumns = ["Label", "Tweet"]
-# test_df= reduce(lambda data, idx: data.withColumnRenamed(oldColumns[idx], newColumns[idx]), range(len(oldColumns)), test_df)
-# # test_df.show(truncate=False)
-# test_y = test_df.select(F.collect_list('Label')).first()[0]
-# test_y=list(map(int,test_y[1:]))
-# test_y=[1 if x==4 else x for x in test_y]
-# test_x = test_df.select(F.collect_list('Tweet')).first()[0][1:]
-# test_x=vectrize(test_x)
-
-
 
 # getting the streaming contents
 lines = ssc.socketTextStream('localhost',6100)
@@ -225,5 +178,3 @@ ssc.start()
 ssc.awaitTermination()
 
 ssc.stop(stopSparkContext=True, stopGraceFully=True)
-
-
