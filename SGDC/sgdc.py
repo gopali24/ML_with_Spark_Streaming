@@ -5,8 +5,8 @@ from pyspark.sql.types import ArrayType, StringType
 from pyspark.streaming import StreamingContext
 from pyspark.sql import SparkSession
 from functools import reduce
-import pyspark.sql.functions as F
-import json
+import  pyspark.sql.functions as F
+import json,math
 import numpy as np
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score
@@ -15,16 +15,18 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 from sklearn.metrics import mean_squared_error
-from pyspark.ml.feature import HashingTF, StringIndexer, Tokenizer, StopWordsRemover,IDF
+from pyspark.ml.feature import HashingTF, RegexTokenizer, StringIndexer, Tokenizer, StopWordsRemover,IDF
 from nltk.stem.snowball import SnowballStemmer
 import joblib
 import sys
+from sklearn.linear_model import PassiveAggressiveClassifier
 from sklearn.model_selection import train_test_split
 import csv 
-
+from nltk.stem.snowball import SnowballStemmer
 import warnings
 warnings.filterwarnings("ignore")
 from sklearn.metrics import precision_score,recall_score
+
 
 def createDataFrame(rdd):
     try:
@@ -53,16 +55,21 @@ def createDataFrame(rdd):
         remover = StopWordsRemover(inputCol='words_token', outputCol='filtered')
         df_words_no_stopw = remover.transform(df_words_token)
 
+        #Stemming data
+        stemmer = SnowballStemmer(language='english')
+        stemmer_udf = F.udf(lambda tokens: [stemmer.stem(token) for token in tokens], ArrayType(StringType()))
+        df_stemmed = df_words_no_stopw.withColumn("word_stemmed", stemmer_udf("filtered")).select('*')
+
         #Hashing using HashingTF
-        hashtf = HashingTF(numFeatures=2500, inputCol="filtered", outputCol='tf')
+        hashtf = HashingTF(numFeatures=2500, inputCol="word_stemmed", outputCol='tf')
         label_stringIdx = StringIndexer(inputCol = "Label", outputCol = "target")
         
         #Pipelining and transforming using the dtages of hashingTF
         pipeline = Pipeline(stages=[hashtf,label_stringIdx])
         
         #Pipeline fitting using the clean data
-        pipelineFit = pipeline.fit(df_words_no_stopw)
-        train_df = pipelineFit.transform(df_words_no_stopw)
+        pipelineFit = pipeline.fit(df_stemmed)
+        train_df = pipelineFit.transform(df_stemmed)
 
         #converting to numpy array and reshaping it according to the dimensions
         trainx=np.array(train_df.select("tf").collect())

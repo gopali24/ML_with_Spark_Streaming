@@ -60,16 +60,19 @@ def createDataFrame(rdd):
         remover = StopWordsRemover(inputCol='words_token', outputCol='filtered')
         df_words_no_stopw = remover.transform(df_words_token)
 
+        #Stemming data
         stemmer = SnowballStemmer(language='english')
         stemmer_udf = F.udf(lambda tokens: [stemmer.stem(token) for token in tokens], ArrayType(StringType()))
-        df_stemmed = df_words_no_stopw.withColumn("words_stemmed", stemmer_udf("words_clean")).select('id', 'words_stemmed')
+        df_stemmed = df_words_no_stopw.withColumn("word_stemmed", stemmer_udf("filtered")).select('*')
 
-        #Hashing Term Frequency
-        hashtf = HashingTF(numFeatures=2500, inputCol="filtered", outputCol='tf')
+        #Hashing using HashingTF
+        hashtf = HashingTF(numFeatures=2500, inputCol="word_stemmed", outputCol='tf')
         label_stringIdx = StringIndexer(inputCol = "Label", outputCol = "target")
-
-        #Pipelining
+        
+        #Pipelining and transforming using the dtages of hashingTF
         pipeline = Pipeline(stages=[hashtf,label_stringIdx])
+        
+        #Pipeline fitting using the clean data
         pipelineFit = pipeline.fit(df_stemmed)
         train_df = pipelineFit.transform(df_stemmed)
 
