@@ -1,5 +1,6 @@
 from pyspark import SparkContext
 from pyspark.ml.pipeline import Pipeline
+from pyspark.sql.types import ArrayType, StringType
 from pyspark.streaming import StreamingContext
 from pyspark.sql import SparkSession
 from functools import reduce
@@ -21,6 +22,7 @@ import csv
 import warnings
 warnings.filterwarnings("ignore")
 from sklearn.metrics import precision_score,recall_score
+from nltk.stem.snowball import SnowballStemmer
 
 
 def vectrize(x_test):
@@ -58,14 +60,18 @@ def createDataFrame(rdd):
         remover = StopWordsRemover(inputCol='words_token', outputCol='filtered')
         df_words_no_stopw = remover.transform(df_words_token)
 
+        stemmer = SnowballStemmer(language='english')
+        stemmer_udf = F.udf(lambda tokens: [stemmer.stem(token) for token in tokens], ArrayType(StringType()))
+        df_stemmed = df_words_no_stopw.withColumn("words_stemmed", stemmer_udf("words_clean")).select('id', 'words_stemmed')
+
         #Hashing Term Frequency
         hashtf = HashingTF(numFeatures=2500, inputCol="filtered", outputCol='tf')
         label_stringIdx = StringIndexer(inputCol = "Label", outputCol = "target")
 
         #Pipelining
         pipeline = Pipeline(stages=[hashtf,label_stringIdx])
-        pipelineFit = pipeline.fit(df_words_no_stopw)
-        train_df = pipelineFit.transform(df_words_no_stopw)
+        pipelineFit = pipeline.fit(df_stemmed)
+        train_df = pipelineFit.transform(df_stemmed)
 
         # train_df.show(5)
         
