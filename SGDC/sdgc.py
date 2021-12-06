@@ -5,35 +5,26 @@ from pyspark.sql.types import ArrayType, StringType
 from pyspark.streaming import StreamingContext
 from pyspark.sql import SparkSession
 from functools import reduce
-import  pyspark.sql.functions as F
-import json,math
+import pyspark.sql.functions as F
+import json
 import numpy as np
-from sklearn.linear_model import SGDClassifier,SGDRegressor
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 from sklearn.metrics import mean_squared_error
-from pyspark.ml.feature import HashingTF, RegexTokenizer, StringIndexer, Tokenizer, StopWordsRemover,IDF
+from pyspark.ml.feature import HashingTF, StringIndexer, Tokenizer, StopWordsRemover,IDF
 from nltk.stem.snowball import SnowballStemmer
 import joblib
 import sys
-from sklearn.linear_model import PassiveAggressiveClassifier
 from sklearn.model_selection import train_test_split
 import csv 
 
 import warnings
 warnings.filterwarnings("ignore")
 from sklearn.metrics import precision_score,recall_score
-
-
-def vectrize(x_test):
-    cv = CountVectorizer(max_features = 2500)
-    x = cv.fit_transform(x_test).toarray()
-    sc = StandardScaler()
-    x = sc.fit_transform(x)
-    return x
 
 def createDataFrame(rdd):
     try:
